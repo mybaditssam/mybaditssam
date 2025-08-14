@@ -1,178 +1,173 @@
 // Main JavaScript for Samuel Hernandez Portfolio
 
-// Wait for DOM to be fully loaded
 document.addEventListener('DOMContentLoaded', function() {
-    // Initialize loading screen
+    // Loading overlay + typing
     setTimeout(function() {
-        document.querySelector('.loading-overlay').classList.add('hidden');
-        
-        // Start typing effect after loading is complete
-        setTimeout(function() {
-            const typingElement = document.getElementById('typing-title');
-            if (typingElement) {
-                typingElement.classList.add('start-typing');
-            }
-        }, 500); // Small delay after loading screen fades out
+      const overlay = document.querySelector('.loading-overlay');
+      if (overlay) overlay.classList.add('hidden');
+  
+      setTimeout(function() {
+        const typingElement = document.getElementById('typing-title');
+        if (typingElement) typingElement.classList.add('start-typing');
+      }, 500);
     }, 1500);
-
+  
     // Navigation variables
-    const hamburger = document.querySelector('.hamburger');
-    const navMenu = document.querySelector('.nav-menu');
-    const navLinks = document.querySelectorAll('.nav-link');
-    const header = document.querySelector('header');
-    const backToTop = document.querySelector('.back-to-top');
+    const hamburger   = document.querySelector('.hamburger');
+    const navMenu     = document.querySelector('.nav-menu');
+    const navLinks    = document.querySelectorAll('.nav-link');
+    const header      = document.querySelector('header');
+    const backToTop   = document.querySelector('.back-to-top');
     const themeSwitch = document.querySelector('.theme-switch');
-    const themeSwitchIcon = document.querySelector('.theme-switch i');
-    const animatedElements = document.querySelectorAll('.animate');
-    const progressBars = document.querySelectorAll('.progress');
-
+    const themeIcon   = themeSwitch ? themeSwitch.querySelector('i') : null;
+    const animatedEls = document.querySelectorAll('.animate');
+  
     // Mobile menu toggle
-    hamburger.addEventListener('click', function() {
+    if (hamburger && navMenu) {
+      hamburger.addEventListener('click', function() {
         this.classList.toggle('active');
         navMenu.classList.toggle('active');
-    });
-
-    // Close mobile menu when clicking a link
+      });
+    }
+  
+    // Close mobile menu on link click + set active
     navLinks.forEach(link => {
-        link.addEventListener('click', function() {
-            hamburger.classList.remove('active');
-            navMenu.classList.remove('active');
-            
-            // Update active nav link
-            navLinks.forEach(navLink => navLink.classList.remove('active'));
-            this.classList.add('active');
-        });
+      link.addEventListener('click', function() {
+        if (hamburger && navMenu) {
+          hamburger.classList.remove('active');
+          navMenu.classList.remove('active');
+        }
+        navLinks.forEach(n => n.classList.remove('active'));
+        this.classList.add('active');
+      });
     });
-
-    // Scroll event listener for various effects
+  
+    // Scroll effects
     window.addEventListener('scroll', function() {
-        const scrollPosition = window.scrollY;
-        
-        // Header shadow on scroll
-        if (scrollPosition > 50) {
-            header.style.boxShadow = '0 5px 20px rgba(0, 0, 0, 0.1)';
-            backToTop.classList.add('visible');
-        } else {
-            header.style.boxShadow = '0 2px 10px rgba(0, 0, 0, 0.1)';
-            backToTop.classList.remove('visible');
-        }
-        
-        // Animate elements when they come into view
-        animateOnScroll();
-        
-        // Update active nav link based on scroll position
-        updateActiveNavLink();
+      const y = window.scrollY;
+  
+      // Header shadow & back-to-top
+      if (header) {
+        header.style.boxShadow = y > 50
+          ? '0 5px 20px rgba(0, 0, 0, 0.1)'
+          : '0 2px 10px rgba(0, 0, 0, 0.1)';
+      }
+      if (backToTop) {
+        backToTop.classList.toggle('visible', y > 50);
+      }
+  
+      // Animations & active nav
+      animateOnScroll();
+      updateActiveNavLink();
     });
-
+  
     // Theme switcher
-    themeSwitch.addEventListener('click', function() {
+    if (themeSwitch) {
+      themeSwitch.addEventListener('click', function() {
         document.body.classList.toggle('dark-theme');
-        if (document.body.classList.contains('dark-theme')) {
-            themeSwitchIcon.className = 'fas fa-sun';
-            localStorage.setItem('theme', 'dark');
-        } else {
-            themeSwitchIcon.className = 'fas fa-moon';
-            localStorage.setItem('theme', 'light');
-        }
-    });
-
-    // Check for saved theme preference
+        const isDark = document.body.classList.contains('dark-theme');
+        if (themeIcon) themeIcon.className = isDark ? 'fas fa-sun' : 'fas fa-moon';
+        localStorage.setItem('theme', isDark ? 'dark' : 'light');
+      });
+    }
+  
+    // Load saved theme
     const savedTheme = localStorage.getItem('theme');
     if (savedTheme === 'dark') {
-        document.body.classList.add('dark-theme');
-        themeSwitchIcon.className = 'fas fa-sun';
+      document.body.classList.add('dark-theme');
+      if (themeIcon) themeIcon.className = 'fas fa-sun';
     }
-
-    // Contact form submission
+  
+    // Contact form (demo)
     const contactForm = document.getElementById('contactForm');
     if (contactForm) {
-        contactForm.addEventListener('submit', function(e) {
-            e.preventDefault();
-            
-            // Simulate form submission (would be replaced with actual API call)
-            const submitBtn = this.querySelector('.btn-submit');
-            const originalText = submitBtn.textContent;
-            
-            submitBtn.textContent = 'Sending...';
-            submitBtn.disabled = true;
-            
-            setTimeout(function() {
-                const inputs = contactForm.querySelectorAll('.form-control');
-                inputs.forEach(input => input.value = '');
-                
-                submitBtn.textContent = 'Message Sent!';
-                
-                setTimeout(function() {
-                    submitBtn.textContent = originalText;
-                    submitBtn.disabled = false;
-                }, 2000);
-            }, 1500);
-        });
-    }
-
-    // Back to top button
-    backToTop.addEventListener('click', function(e) {
+      contactForm.addEventListener('submit', function(e) {
         e.preventDefault();
-        window.scrollTo({
-            top: 0,
-            behavior: 'smooth'
-        });
-    });
-
-    // Function to animate elements on scroll
+        const submitBtn = this.querySelector('.btn-submit');
+        if (!submitBtn) return;
+  
+        const originalText = submitBtn.textContent;
+        submitBtn.textContent = 'Sending...';
+        submitBtn.disabled = true;
+  
+        setTimeout(() => {
+          this.querySelectorAll('.form-control').forEach(inp => inp.value = '');
+          submitBtn.textContent = 'Message Sent!';
+          setTimeout(() => {
+            submitBtn.textContent = originalText;
+            submitBtn.disabled = false;
+          }, 2000);
+        }, 1500);
+      });
+    }
+  
+    // Back to top
+    if (backToTop) {
+      backToTop.addEventListener('click', function(e) {
+        e.preventDefault();
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      });
+    }
+  
+    // --- Helpers ---
+  
+    // Map tiers → widths (for animating bars)
+    const LEVEL_WIDTH = {
+      working:    '60%',
+      proficient: '80%',
+      advanced:   '95%'
+    };
+  
     function animateOnScroll() {
-        animatedElements.forEach(element => {
-            const elementPosition = element.getBoundingClientRect().top;
-            const windowHeight = window.innerHeight;
-            
-            if (elementPosition < windowHeight - 50) {
-                element.classList.add('animated');
-                
-                // Animate progress bars if they're in view
-                if (element.closest('.skill-category')) {
-                    const progressBars = element.querySelectorAll('.progress');
-                    progressBars.forEach(bar => {
-                        const width = bar.getAttribute('data-width');
-                        bar.style.width = width;
-                    });
-                }
+      animatedEls.forEach(el => {
+        const rectTop = el.getBoundingClientRect().top;
+        const winH = window.innerHeight;
+  
+        if (rectTop < winH - 50) {
+          el.classList.add('animated');
+  
+          // Animate any progress bars within this element
+          el.querySelectorAll('.progress').forEach(bar => {
+            const level = bar.getAttribute('data-level');   // working|proficient|advanced
+            const pct   = bar.getAttribute('data-width');   // e.g., "85%"
+            const width = level ? LEVEL_WIDTH[level.toLowerCase()] : pct;
+  
+            if (width) {
+              // Trigger CSS transition by setting width next frame
+              requestAnimationFrame(() => { bar.style.width = width; });
             }
-        });
+          });
+        }
+      });
     }
-
-    // Function to update active nav link based on scroll position
+  
     function updateActiveNavLink() {
-        const sections = document.querySelectorAll('section');
-        let currentSection = '';
-        
-        sections.forEach(section => {
-            const sectionTop = section.offsetTop;
-            const sectionHeight = section.clientHeight;
-            
-            if (window.scrollY >= (sectionTop - 100)) {
-                currentSection = section.getAttribute('id');
-            }
-        });
-        
-        navLinks.forEach(link => {
-            link.classList.remove('active');
-            if (link.getAttribute('href') === '#' + currentSection) {
-                link.classList.add('active');
-            }
-            
-            // Home link special case
-            if (currentSection === '' && link.getAttribute('href') === '#') {
-                link.classList.add('active');
-            }
-        });
+      const sections = document.querySelectorAll('section[id]');
+      let current = '';
+  
+      sections.forEach(sec => {
+        const top = sec.offsetTop;
+        if (window.scrollY >= top - 100) current = sec.id;
+      });
+  
+      navLinks.forEach(link => {
+        link.classList.remove('active');
+        const href = link.getAttribute('href');
+        if (href === '#' + current || (current === '' && href === '#')) {
+          link.classList.add('active');
+        }
+      });
     }
-
-    // Initialize animations
+  
+    // Init
     animateOnScroll();
-    
-    // Initialize progress bars for visible elements
+  
+    // Initialize progress bars already in view on load
     document.querySelectorAll('.skill-category.animated .progress').forEach(bar => {
-        const width = bar.getAttribute('data-width');
-        bar.style.width = width;
+      const level = bar.getAttribute('data-level');
+      const pct   = bar.getAttribute('data-width');
+      const width = level ? LEVEL_WIDTH[level.toLowerCase()] : pct;
+      if (width) bar.style.width = width;
     });
-});
+  });
+  
