@@ -1,7 +1,13 @@
-// Generates the SVG graphics for the GitHub profile README, one dark and one
-// light variant of each, from Navo's own palette. No dependencies: the SVGs
-// are strings, and the only things that move are SMIL animations, which run
-// inside an <img> where GitHub puts them (no scripts, no external fonts).
+// Draws the graphics for the profile README: a title card that boots, a
+// record that spins, a sequencer that runs. No dependencies. Everything
+// that moves is SMIL inside the SVG, which is what runs where GitHub puts
+// images: no scripts, no external fonts. `node scripts/build-assets.mjs`
+// rewrites assets/.
+//
+// Every "appear" animation starts at t=0 and holds the element hidden until
+// its cue, with the element's own attributes set to the finished state. A
+// viewer without SMIL (rare) sees the finished page; one with it sees the
+// boot.
 import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -9,422 +15,372 @@ import { fileURLToPath } from "node:url";
 const OUT = join(dirname(fileURLToPath(import.meta.url)), "..", "assets");
 mkdirSync(OUT, { recursive: true });
 
-const FONT = `-apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", Helvetica, Arial, sans-serif`;
-
-const THEMES = {
-  dark: {
-    bg: "#161513",
-    border: "#2b2926",
-    panel: "#1f1e1b",
-    panelBorder: "#34322e",
-    ink: "#fdfcfa",
-    ink2: "#c9c6c1",
-    muted: "#82807c",
-    line: "#3d3b37",
-    accent: "#7ccdd6",
-    accentInk: "#a6e0e5",
-    accentDeep: "#206f78",
-    coral: "#f2a592",
-    glowTeal: "#206f78",
-    glowCoral: "#d98a80",
-    glowOpacity: 0.34,
-    rowFill: "#1f1e1b",
-    chipFill: "#1f1e1b",
-  },
-  light: {
-    bg: "#fdfcfa",
-    border: "#e6e4e0",
-    panel: "#ffffff",
-    panelBorder: "#e6e4e0",
-    ink: "#1f1e1b",
-    ink2: "#4a4844",
-    muted: "#82807c",
-    line: "#d6d3ce",
-    accent: "#206f78",
-    accentInk: "#0d2e32",
-    accentDeep: "#64bbc4",
-    coral: "#d98a80",
-    glowTeal: "#a6e0e5",
-    glowCoral: "#f2a592",
-    glowOpacity: 0.5,
-    rowFill: "#ffffff",
-    chipFill: "#ffffff",
-  },
+// Black, orange, white. One world, so one theme: the cards carry their own
+// ground on either GitHub theme.
+const C = {
+  bg: "#0a0a0a",
+  frame: "#262626",
+  cell: "#161616",
+  cellLine: "#2a2a2a",
+  ink: "#f4f1ec",
+  dim: "#8a8782",
+  orange: "#ff7a1a",
+  ember: "#ff4d1f",
+  green: "#39d98a",
 };
 
+const MONO = `"SF Mono", "JetBrains Mono", Menlo, Consolas, "Liberation Mono", "DejaVu Sans Mono", monospace`;
+// A heavy Mincho where one exists, a heavy serif where it doesn't.
+const SERIF = `"Hiragino Mincho ProN", "Hiragino Mincho Pro", "Yu Mincho", "Noto Serif JP", "Noto Serif CJK JP", "Times New Roman", Times, serif`;
+
+const BPM = 122;
+const BAR = (60 / BPM) * 4; // one bar of 4/4, in seconds
+const STEP = BAR / 16;
+
 const esc = (s) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+const r3 = (n) => Math.round(n * 1000) / 1000;
 
-/* ------------------------------------------------------------------ Orbi */
+/* ------------------------------------------------------------- motion */
 
-/** Orbi, mood "hello": the same drawing as the app's component, stood still
- *  except for a float, a blink, and a wave every few seconds. */
-function orbi(p, { x, y, scale, wave = true, blink = true, float = true }) {
-  const g = (name) => `url(#${p}-${name})`;
-  const tilt = -18;
-  const eye = (cx) => `
-    <ellipse cx="${cx + 1}" cy="94" rx="12" ry="12" fill="#0d2e32" opacity="0.22"/>
-    <ellipse cx="${cx}" cy="92" rx="9" ry="9" fill="#1f1e1b"/>
-    <ellipse cx="${cx}" cy="93" rx="6.7" ry="6.7" fill="${g("iris")}"/>
-    <ellipse cx="${cx}" cy="93.5" rx="3.8" ry="3.8" fill="#0e0d0c"/>
-    <ellipse cx="${cx - 3.1}" cy="88.8" rx="2.7" ry="2.7" fill="#ffffff" opacity="0.96"/>
-    <circle cx="${cx + 3.2}" cy="95.6" r="1.1" fill="#ffffff" opacity="0.8"/>`;
+/** Hidden from t=0, shown at `at` seconds, in one cut. */
+const cutIn = (at) =>
+  `<animate attributeName="opacity" values="0;0;1" keyTimes="0;${r3(at / (at + 0.01))};1" dur="${r3(at + 0.01)}s" calcMode="discrete" fill="freeze"/>`;
 
-  const floatAnim = float
-    ? `<animateTransform attributeName="transform" type="translate" values="0 0;0 -5;0 0" dur="4.8s" repeatCount="indefinite" calcMode="spline" keySplines="0.45 0 0.55 1;0.45 0 0.55 1"/>`
-    : "";
-  const shadeAnim = float
-    ? `<animate attributeName="rx" values="46;41;46" dur="4.8s" repeatCount="indefinite" calcMode="spline" keySplines="0.45 0 0.55 1;0.45 0 0.55 1"/>`
-    : "";
-  const waveAnim = wave
-    ? `<animateTransform attributeName="transform" type="rotate" values="0 48 84;0 48 84;20 48 84;-8 48 84;18 48 84;-4 48 84;0 48 84;0 48 84" keyTimes="0;0.08;0.15;0.22;0.29;0.36;0.42;1" dur="6.5s" begin="0.8s" repeatCount="indefinite"/>`
-    : "";
-  const blinkAnim = blink
-    ? `<animateTransform attributeName="transform" type="scale" values="1 1;1 1;1 0.06;1 1;1 1" keyTimes="0;0.86;0.9;0.94;1" dur="5.3s" repeatCount="indefinite"/>`
-    : "";
+/** Monospace text typed out one character at a time, from `at` seconds. */
+function typed(x, y, text, { size = 12, fill = C.orange, opacity = 1, spacing = 2, at = 0, cps = 28, id }) {
+  const adv = size * 0.6 + spacing;
+  const w = r3(text.length * adv);
+  const total = r3(at + text.length / cps);
+  const widths = ["0", "0", ...Array.from({ length: text.length }, (_, i) => r3((i + 1) * adv))];
+  const times = ["0", r3(at / total), ...Array.from({ length: text.length }, (_, i) => r3((at + (i + 1) / cps) / total))];
+  const clipId = `clip-${id}`;
+  return `<clipPath id="${clipId}"><rect x="${x - 1}" y="${y - size}" width="${w + 4}" height="${size * 1.5}">
+      <animate attributeName="width" values="${widths.join(";")}" keyTimes="${times.join(";")}" dur="${total}s" calcMode="discrete" fill="freeze"/>
+    </rect></clipPath>
+    <text x="${x}" y="${y}" font-family='${MONO}' font-size="${size}" letter-spacing="${spacing}" fill="${fill}" fill-opacity="${opacity}" textLength="${w}" lengthAdjust="spacing" clip-path="url(#${clipId})">${esc(text)}</text>`;
+}
 
-  return `
-  <defs>
-    <radialGradient id="${p}-body" cx="36%" cy="30%" r="78%">
-      <stop offset="0" stop-color="#a6e0e5"/><stop offset="0.28" stop-color="#4fa9b3"/>
-      <stop offset="0.68" stop-color="#206f78"/><stop offset="1" stop-color="#0d2e32"/>
+/* ------------------------------------------------------------ atmosphere */
+
+function hexPattern(id, r = 26, opacity = 0.1) {
+  const w = Math.sqrt(3) * r;
+  const h = 3 * r;
+  const hex = (cx, cy) =>
+    Array.from({ length: 6 }, (_, k) => {
+      const a = (Math.PI / 180) * (60 * k - 90);
+      return `${r3(cx + r * Math.cos(a))},${r3(cy + r * Math.sin(a))}`;
+    }).join(" ");
+  const poly = (pts) => `<polygon points="${pts}" fill="none" stroke="${C.orange}" stroke-opacity="${opacity}" stroke-width="1"/>`;
+  return `<pattern id="${id}" width="${r3(w)}" height="${h}" patternUnits="userSpaceOnUse">
+    ${poly(hex(w / 2, r))}${poly(hex(0, 2.5 * r))}${poly(hex(w, 2.5 * r))}
+  </pattern>`;
+}
+
+function frame(W, H, { glow = null } = {}) {
+  return `<defs>
+    ${hexPattern("hex")}
+    <pattern id="scan" width="4" height="3" patternUnits="userSpaceOnUse"><rect width="4" height="1" fill="#ffffff" fill-opacity="0.045"/></pattern>
+    <pattern id="hazard" width="28" height="10" patternUnits="userSpaceOnUse" patternTransform="skewX(-45)">
+      <rect width="14" height="10" fill="${C.orange}"/><rect x="14" width="14" height="10" fill="#111111"/>
+    </pattern>
+    <clipPath id="frame"><rect x="0.5" y="0.5" width="${W - 1}" height="${H - 1}" rx="18"/></clipPath>
+    <radialGradient id="glow" cx="50%" cy="50%" r="50%">
+      <stop offset="0" stop-color="${C.orange}" stop-opacity="0.22"/><stop offset="1" stop-color="${C.orange}" stop-opacity="0"/>
     </radialGradient>
-    <radialGradient id="${p}-rim" cx="100" cy="100" r="56" gradientUnits="userSpaceOnUse">
-      <stop offset="0.8" stop-color="#7ccdd6" stop-opacity="0"/><stop offset="0.94" stop-color="#7ccdd6" stop-opacity="0.42"/>
-      <stop offset="1" stop-color="#a6e0e5" stop-opacity="0.55"/>
-    </radialGradient>
-    <radialGradient id="${p}-limb" cx="35%" cy="30%" r="75%">
-      <stop offset="0" stop-color="#5db3bc"/><stop offset="0.55" stop-color="#1f6b74"/><stop offset="1" stop-color="#0d2e32"/>
-    </radialGradient>
-    <radialGradient id="${p}-iris" cx="40%" cy="35%" r="70%">
-      <stop offset="0" stop-color="#3a8f99"/><stop offset="0.55" stop-color="#155056"/><stop offset="1" stop-color="#0a2226"/>
-    </radialGradient>
-    <radialGradient id="${p}-moon" cx="35%" cy="30%" r="75%">
-      <stop offset="0" stop-color="#c6ecf0"/><stop offset="0.5" stop-color="#64bbc4"/><stop offset="1" stop-color="#206f78"/>
-    </radialGradient>
-    <radialGradient id="${p}-cheek" cx="50%" cy="50%" r="50%">
-      <stop offset="0" stop-color="#f2a592" stop-opacity="0.78"/><stop offset="0.65" stop-color="#f2a592" stop-opacity="0.3"/>
-      <stop offset="1" stop-color="#f2a592" stop-opacity="0"/>
-    </radialGradient>
-    <radialGradient id="${p}-spec" cx="50%" cy="50%" r="50%">
-      <stop offset="0" stop-color="#ffffff" stop-opacity="0.92"/><stop offset="0.55" stop-color="#ffffff" stop-opacity="0.38"/>
-      <stop offset="1" stop-color="#ffffff" stop-opacity="0"/>
-    </radialGradient>
-    <radialGradient id="${p}-shadow" cx="50%" cy="50%" r="50%">
-      <stop offset="0" stop-color="#1f1e1b" stop-opacity="0.3"/><stop offset="0.6" stop-color="#1f1e1b" stop-opacity="0.12"/>
-      <stop offset="1" stop-color="#1f1e1b" stop-opacity="0"/>
-    </radialGradient>
-    <linearGradient id="${p}-ring" x1="20" y1="60" x2="180" y2="160" gradientUnits="userSpaceOnUse">
-      <stop offset="0" stop-color="#fdfcfa"/><stop offset="0.45" stop-color="#e6e4e0"/><stop offset="1" stop-color="#a8a5a0"/>
+    <linearGradient id="sweep" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="${C.orange}" stop-opacity="0"/><stop offset="0.5" stop-color="${C.orange}" stop-opacity="0.10"/><stop offset="1" stop-color="${C.orange}" stop-opacity="0"/>
     </linearGradient>
-    <linearGradient id="${p}-ringback" x1="20" y1="60" x2="180" y2="160" gradientUnits="userSpaceOnUse">
-      <stop offset="0" stop-color="#c9c6c1"/><stop offset="1" stop-color="#8f8c87"/>
-    </linearGradient>
-    <clipPath id="${p}-clip"><circle cx="100" cy="100" r="56"/></clipPath>
   </defs>
-  <g transform="translate(${x} ${y}) scale(${scale})">
-    <ellipse cx="100" cy="190" rx="46" ry="8" fill="${g("shadow")}">${shadeAnim}</ellipse>
-    <g>${floatAnim}
-      <g transform="rotate(${tilt} 100 106)">
-        <ellipse cx="100" cy="106" rx="92" ry="30" fill="none" stroke="${g("ringback")}" stroke-width="14"/>
-      </g>
-      <ellipse cx="84" cy="158" rx="10.5" ry="6.5" fill="${g("limb")}"/>
-      <ellipse cx="116" cy="158" rx="10.5" ry="6.5" fill="${g("limb")}"/>
-      <ellipse cx="156" cy="112" rx="7" ry="11" fill="${g("limb")}" transform="rotate(-20 156 112)"/>
-      <g>${waveAnim}
-        <ellipse cx="37" cy="73" rx="7.5" ry="16" fill="${g("limb")}" transform="rotate(-45 37 73)"/>
-      </g>
-      <circle cx="100" cy="100" r="56" fill="${g("body")}"/>
-      <path d="M155.8,104.9 A56,56 0 0 1 67.9,145.9 Q113,127.9 155.8,104.9 Z" fill="${g("rim")}"/>
-      <ellipse cx="76" cy="70" rx="14" ry="20" fill="${g("spec")}" transform="rotate(30 76 70)"/>
-      <circle cx="73" cy="62" r="3.6" fill="#ffffff" opacity="0.95"/>
-      <g clip-path="url(#${p}-clip)">
-        <g transform="rotate(${tilt} 100 106)">
-          <path d="M8,106 A92,30 0 0 0 192,106" fill="none" stroke="#0b2a2e" stroke-width="22" stroke-opacity="0.3" transform="translate(0 6)"/>
-          <path d="M8,106 A92,30 0 0 0 192,106" fill="none" stroke="#0b2a2e" stroke-width="12" stroke-opacity="0.22" transform="translate(0 3)"/>
-        </g>
-      </g>
-      <g transform="rotate(${tilt} 100 106)">
-        <path d="M8,106 A92,30 0 0 0 192,106" fill="none" stroke="${g("ring")}" stroke-width="14"/>
-        <path d="M8,106 A92,30 0 0 0 192,106" fill="none" stroke="#82807c" stroke-width="3.5" stroke-opacity="0.6" transform="translate(0 5)"/>
-        <path d="M8,106 A92,30 0 0 0 192,106" fill="none" stroke="#ffffff" stroke-width="3" stroke-opacity="0.65" stroke-linecap="round" transform="translate(0 -4)"/>
-        <circle cx="35.9" cy="129.2" r="7" fill="#1f1e1b" opacity="0.18"/>
-        <circle cx="34.9" cy="127.2" r="6.5" fill="${g("moon")}"/>
-        <circle cx="32.7" cy="124.8" r="1.6" fill="#ffffff" opacity="0.9"/>
-      </g>
-      <ellipse cx="66" cy="105" rx="9" ry="6" fill="${g("cheek")}"/>
-      <ellipse cx="134" cy="105" rx="9" ry="6" fill="${g("cheek")}"/>
-      <g transform="translate(100 93)"><g>${blinkAnim}<g transform="translate(-100 -93)">${eye(84)}${eye(116)}</g></g></g>
-      <path d="M94,112 Q100,117 106,112" fill="none" stroke="#1f1e1b" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+  <rect x="0.5" y="0.5" width="${W - 1}" height="${H - 1}" rx="18" fill="${C.bg}" stroke="${C.frame}"/>
+  <g clip-path="url(#frame)">
+    <rect width="${W}" height="${H}" fill="url(#hex)"/>
+    ${glow ? `<circle cx="${glow[0]}" cy="${glow[1]}" r="${glow[2]}" fill="url(#glow)"/>` : ""}
+    <rect width="${W}" height="${H}" fill="url(#scan)"/>
+  </g>`;
+}
+
+const hazard = (W, y, h, dir) => `<g clip-path="url(#frame)">
+    <rect x="-80" y="${y}" width="${W + 160}" height="${h}" fill="url(#hazard)" opacity="0.9">
+      <animateTransform attributeName="transform" type="translate" from="0 0" to="${dir * 28} 0" dur="1.6s" repeatCount="indefinite"/>
+    </rect>
+  </g>`;
+
+/* --------------------------------------------------------------- pieces */
+
+/** A bar of 16 steps across three voices, the playhead walking it at
+ *  122 BPM and each hit lighting as it is passed. */
+function sequencer({ x, y, stepW = 56, cellH = 18, gap = 6 }) {
+  const voices = [
+    { label: "KICK", hits: [0, 4, 8, 12] },
+    { label: "HAT", hits: [2, 6, 10, 14] },
+    { label: "CLAP", hits: [4, 12] },
+  ];
+  const gridX = x + 62;
+  const rowH = cellH + gap;
+  const H = voices.length * rowH - gap;
+  const cells = voices
+    .map((v, row) => {
+      const cy = y + row * rowH;
+      const label = `<text x="${x}" y="${cy + cellH - 5}" font-family='${MONO}' font-size="11" letter-spacing="1.5" fill="${C.orange}" fill-opacity="0.85">${v.label}</text>`;
+      const steps = Array.from({ length: 16 }, (_, i) => {
+        const cx = gridX + i * stepW;
+        if (!v.hits.includes(i)) {
+          return `<rect x="${cx}" y="${cy}" width="${stepW - 8}" height="${cellH}" rx="2" fill="${C.cell}" stroke="${C.cellLine}"/>`;
+        }
+        return `<rect x="${cx}" y="${cy}" width="${stepW - 8}" height="${cellH}" rx="2" fill="${C.orange}" opacity="0.5">
+          <animate attributeName="opacity" values="0.5;1;0.5;0.5" keyTimes="0;0.02;0.09;1" dur="${r3(BAR)}s" begin="${r3(i * STEP)}s" repeatCount="indefinite"/>
+        </rect>`;
+      }).join("");
+      return label + steps;
+    })
+    .join("");
+  const positions = Array.from({ length: 16 }, (_, i) => gridX + i * stepW - 4).join(";");
+  const playhead = `<rect x="${gridX - 4}" y="${y - 6}" width="${stepW}" height="${H + 12}" rx="3" fill="${C.orange}" opacity="0.16">
+      <animate attributeName="x" values="${positions}" dur="${r3(BAR)}s" calcMode="discrete" repeatCount="indefinite"/>
+    </rect>`;
+  return cells + playhead;
+}
+
+/** Bars that dance: each one its own loop, no two alike. */
+function eq({ x, y, n = 24, w = 7, gap = 3, max = 56 }) {
+  let seed = 7;
+  const rnd = () => {
+    seed = (seed * 9301 + 49297) % 233280;
+    return seed / 233280;
+  };
+  return Array.from({ length: n }, (_, i) => {
+    const hs = Array.from({ length: 4 }, () => Math.round(8 + rnd() * max));
+    hs.push(hs[0]);
+    const dur = r3(0.45 + rnd() * 0.5);
+    return `<rect x="${x + i * (w + gap)}" y="${y - hs[0]}" width="${w}" height="${hs[0]}" rx="1" fill="${C.orange}" opacity="${r3(0.55 + (i % 3) * 0.15)}">
+      <animate attributeName="height" values="${hs.join(";")}" dur="${dur}s" repeatCount="indefinite"/>
+      <animate attributeName="y" values="${hs.map((h) => y - h).join(";")}" dur="${dur}s" repeatCount="indefinite"/>
+    </rect>`;
+  }).join("");
+}
+
+/** A targeting ring, drawn about the origin: it locks on, then turns. */
+function reticle(r, lockAt) {
+  const ticks = Array.from({ length: 36 }, (_, i) => {
+    const a = (Math.PI / 180) * (i * 10);
+    const long = i % 9 === 0;
+    const r1 = r - (long ? 14 : 7);
+    return `<line x1="${r3(r1 * Math.cos(a))}" y1="${r3(r1 * Math.sin(a))}" x2="${r3(r * Math.cos(a))}" y2="${r3(r * Math.sin(a))}" stroke="${C.orange}" stroke-opacity="${long ? 0.9 : 0.45}" stroke-width="${long ? 1.5 : 1}"/>`;
+  }).join("");
+  const lockDur = r3(lockAt + 0.7);
+  const k = r3(lockAt / lockDur);
+  return `<g>
+    <animateTransform attributeName="transform" type="scale" values="1.7;1.7;1" keyTimes="0;${k};1" dur="${lockDur}s" calcMode="spline" keySplines="0 0 1 1;0.1 0.9 0.2 1" fill="freeze"/>
+    <animate attributeName="opacity" values="0;0;1" keyTimes="0;${k};1" dur="${lockDur}s" fill="freeze"/>
+    <g>
+      <animateTransform attributeName="transform" type="rotate" from="0" to="360" dur="60s" repeatCount="indefinite"/>
+      <circle r="${r}" fill="none" stroke="${C.orange}" stroke-opacity="0.5"/>
+      ${ticks}
+    </g>
+    <g>
+      <animateTransform attributeName="transform" type="rotate" from="360" to="0" dur="90s" repeatCount="indefinite"/>
+      <circle r="${r - 30}" fill="none" stroke="${C.orange}" stroke-opacity="0.35" stroke-dasharray="18 10"/>
+    </g>
+    <circle r="${r - 62}" fill="none" stroke="${C.orange}" stroke-opacity="0.25"/>
+    <line x1="${-r - 10}" y1="0" x2="${-r + 40}" y2="0" stroke="${C.orange}" stroke-opacity="0.5"/>
+    <line x1="${r - 40}" y1="0" x2="${r + 10}" y2="0" stroke="${C.orange}" stroke-opacity="0.5"/>
+    <line x1="0" y1="${-r - 10}" x2="0" y2="${-r + 40}" stroke="${C.orange}" stroke-opacity="0.5"/>
+    <line x1="0" y1="${r - 40}" x2="0" y2="${r + 10}" stroke="${C.orange}" stroke-opacity="0.5"/>
+  </g>`;
+}
+
+/** Two offset copies that flash for a few frames every so often. */
+function glitch(x, y, text, { size, spacing, anchor = "start", period = 6.5, at = 0.52 }) {
+  const t = [0, at, at + 0.014, at + 0.04, at + 0.054, at + 0.09].map((v) => r3(v));
+  const anim = `<animate attributeName="opacity" values="0;0;0.9;0;0.9;0;0" keyTimes="${t.join(";")};1" dur="${period}s" calcMode="discrete" repeatCount="indefinite"/>`;
+  const copy = (dx, fill) =>
+    `<text x="${x + dx}" y="${y}" font-family='${SERIF}' font-size="${size}" font-weight="800" letter-spacing="${spacing}" fill="${fill}" text-anchor="${anchor}" opacity="0">${anim}${esc(text)}</text>`;
+  return copy(-5, C.orange) + copy(5, C.ember);
+}
+
+const mono = (x, y, text, { size = 12, fill = C.orange, opacity = 1, anchor = "start", spacing = 2, extra = "" } = {}) =>
+  `<text x="${x}" y="${y}" font-family='${MONO}' font-size="${size}" letter-spacing="${spacing}" fill="${fill}" fill-opacity="${opacity}" text-anchor="${anchor}">${extra}${esc(text)}</text>`;
+
+const serif = (x, y, text, { size = 64, fill = C.ink, anchor = "start", spacing = -1, extra = "" } = {}) =>
+  `<text x="${x}" y="${y}" font-family='${SERIF}' font-size="${size}" font-weight="800" letter-spacing="${spacing}" fill="${fill}" text-anchor="${anchor}">${extra}${esc(text)}</text>`;
+
+/** A line that scrolls forever, seamlessly, because its width is pinned. */
+function marquee({ x, y, width, items, size = 12, speed = 70 }) {
+  // Non-breaking spaces: ordinary ones collapse at the ends of a text run,
+  // and the seam between the two copies would lose its gap.
+  const NB = " ";
+  const text = items.map((s) => `${s.replace(/ {2}/g, NB + NB)}${NB.repeat(3)}///${NB.repeat(3)}`).join("");
+  const adv = size * 0.6 + 2;
+  const w = r3(text.length * adv);
+  const dur = r3(w / speed);
+  return `<clipPath id="marquee"><rect x="${x}" y="${y - size}" width="${width}" height="${size * 1.6}"/></clipPath>
+  <g clip-path="url(#marquee)">
+    <g>
+      <animateTransform attributeName="transform" type="translate" from="0 0" to="${-w} 0" dur="${dur}s" repeatCount="indefinite"/>
+      <text x="${x}" y="${y}" font-family='${MONO}' font-size="${size}" letter-spacing="2" fill="${C.dim}" textLength="${w}" lengthAdjust="spacing">${esc(text)}</text>
+      <text x="${x + w}" y="${y}" font-family='${MONO}' font-size="${size}" letter-spacing="2" fill="${C.dim}" textLength="${w}" lengthAdjust="spacing">${esc(text)}</text>
     </g>
   </g>`;
 }
 
-/* ------------------------------------------------------------------ hero */
+/* ---------------------------------------------------------------- hero */
 
-function hero(t) {
+function hero() {
   const W = 1200;
-  const H = 440;
-
-  // Every channel, one list: three sources, three paths, one list.
-  const sources = [
-    { label: "new lead", y: 128, color: t.accent },
-    { label: "text", y: 208, color: t.accent },
-    { label: "missed call", y: 288, color: t.coral },
-  ];
-  const SX = 656; // source pill left
-  const SW = 124; // source pill width
-  const LX = 876; // list left
-  const LW = 146; // list width
-  const ROW_Y = [112, 160, 208, 256, 304];
-  const ROW_H = 36;
-  const ARRIVE = { x: LX, y: ROW_Y[0] + ROW_H / 2 };
-  const CYCLE = 7.5;
-  const TRAVEL = 2.3;
-
-  const paths = sources
-    .map((s, i) => {
-      const x0 = SX + SW;
-      const y0 = s.y + 17;
-      const d = `M${x0},${y0} C${x0 + 50},${y0} ${ARRIVE.x - 52},${ARRIVE.y} ${ARRIVE.x},${ARRIVE.y}`;
-      return `<path id="p${i}" d="${d}" fill="none" stroke="${t.line}" stroke-width="1.5"/>`;
-    })
-    .join("\n");
-
-  const dots = sources
-    .map((s, i) => {
-      const begin = (i * CYCLE) / 3;
-      const k = TRAVEL / CYCLE;
-      const kt = `0;${k.toFixed(3)};1`;
-      const op = `0;1;1;0;0`;
-      const opt = `0;0.02;${(k - 0.02).toFixed(3)};${k.toFixed(3)};1`;
-      return `
-      <g opacity="0">
-        <animate attributeName="opacity" values="${op}" keyTimes="${opt}" dur="${CYCLE}s" begin="${begin}s" repeatCount="indefinite"/>
-        <animateMotion dur="${CYCLE}s" begin="${begin}s" repeatCount="indefinite" keyPoints="0;1;1" keyTimes="${kt}" calcMode="linear" rotate="none"><mpath href="#p${i}"/></animateMotion>
-        <circle r="11" fill="${s.color}" opacity="0.22"/>
-        <circle r="5" fill="${s.color}"/>
-      </g>`;
-    })
-    .join("\n");
-
-  // The top row lights up when a dot lands. One flash element per arrival,
-  // because two animations on one attribute fight.
-  const flashes = sources
-    .map((s, i) => {
-      const begin = (i * CYCLE) / 3 + TRAVEL;
-      return `<rect x="${LX}" y="${ROW_Y[0]}" width="${LW}" height="${ROW_H}" rx="10" fill="${s.color}" opacity="0">
-        <animate attributeName="opacity" values="0;0.38;0" keyTimes="0;0.06;0.3" dur="${CYCLE}s" begin="${begin}s" repeatCount="indefinite"/>
-      </rect>
-      <rect x="${LX}" y="${ROW_Y[0]}" width="${LW}" height="${ROW_H}" rx="10" fill="none" stroke="${s.color}" stroke-width="1.5" opacity="0">
-        <animate attributeName="opacity" values="0;1;0" keyTimes="0;0.05;0.4" dur="${CYCLE}s" begin="${begin}s" repeatCount="indefinite"/>
-      </rect>`;
-    })
-    .join("\n");
-
-  const rows = ROW_Y.map((y, i) => {
-    const first = i === 0;
-    const w1 = [58, 46, 64, 40, 52][i];
-    return `
-    <rect x="${LX}" y="${y}" width="${LW}" height="${ROW_H}" rx="10" fill="${t.rowFill}" stroke="${first ? t.accent : t.panelBorder}" stroke-width="${first ? 1.5 : 1}"${first ? "" : ` opacity="${(0.95 - i * 0.14).toFixed(2)}"`}/>
-    <circle cx="${LX + 20}" cy="${y + ROW_H / 2}" r="8" fill="${first ? t.accent : t.line}"${first ? "" : ' opacity="0.9"'}/>
-    <rect x="${LX + 36}" y="${y + 11}" width="${w1}" height="6" rx="3" fill="${first ? t.ink : t.muted}" opacity="${first ? 0.9 : 0.55}"/>
-    <rect x="${LX + 36}" y="${y + 22}" width="${Math.round(w1 * 0.62)}" height="4" rx="2" fill="${t.muted}" opacity="0.5"/>`;
-  }).join("\n");
-
-  const pills = sources
-    .map(
-      (s) => `
-    <rect x="${SX}" y="${s.y}" width="${SW}" height="34" rx="17" fill="${t.chipFill}" stroke="${t.panelBorder}"/>
-    <circle cx="${SX + 19}" cy="${s.y + 17}" r="4.5" fill="${s.color}"/>
-    <text x="${SX + 32}" y="${s.y + 22}" font-family='${FONT}' font-size="14" font-weight="500" fill="${t.ink2}">${esc(s.label)}</text>`,
-    )
-    .join("\n");
-
-  const glow = (id, color, x, y, drift) => `
-    <radialGradient id="${id}" cx="50%" cy="50%" r="50%">
-      <stop offset="0" stop-color="${color}" stop-opacity="${t.glowOpacity}"/>
-      <stop offset="1" stop-color="${color}" stop-opacity="0"/>
-    </radialGradient>
-    <circle cx="${x}" cy="${y}" r="330" fill="url(#${id})">
-      <animateTransform attributeName="transform" type="translate" values="0 0;${drift};0 0" dur="18s" repeatCount="indefinite" calcMode="spline" keySplines="0.45 0 0.55 1;0.45 0 0.55 1"/>
-    </circle>`;
-
-  return `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" role="img" aria-labelledby="t d">
+  const H = 580;
+  const kana = ["サ", "ミ", "ュ", "エ", "ル"];
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" role="img" aria-labelledby="t d">
   <title id="t">Samuel Hernandez</title>
-  <desc id="d">I build the tools insurance agencies run on. Every channel, one list.</desc>
-  <defs>
-    <clipPath id="frame"><rect x="0.5" y="0.5" width="${W - 1}" height="${H - 1}" rx="24"/></clipPath>
-  </defs>
-  <rect x="0.5" y="0.5" width="${W - 1}" height="${H - 1}" rx="24" fill="${t.bg}" stroke="${t.border}"/>
+  <desc id="d">Miami, FL. Online. Sync 100 percent. Now playing Solomun, rewatching all 26 episodes again, a sequencer running at ${BPM} BPM.</desc>
+  ${frame(W, H, { glow: [980, 60, 460] })}
   <g clip-path="url(#frame)">
-    ${glow("gt", t.glowTeal, 1010, 40, "-70 60")}
-    ${glow("gc", t.glowCoral, 120, 480, "90 -50")}
+    <rect x="0" y="-90" width="${W}" height="90" fill="url(#sweep)">
+      <animateTransform attributeName="transform" type="translate" from="0 0" to="0 ${H + 180}" dur="7s" repeatCount="indefinite"/>
+    </rect>
   </g>
 
-  <!-- Words -->
-  <text x="64" y="84" font-family='${FONT}' font-size="13" font-weight="600" letter-spacing="2.6" fill="${t.muted}">SAMUEL HERNANDEZ  ·  MIAMI, FL</text>
-  <text font-family='${FONT}' font-size="54" font-weight="800" letter-spacing="-1.6" fill="${t.ink}">
-    <tspan x="62" y="150">I build the tools</tspan>
-    <tspan x="62" y="208">insurance agencies</tspan>
-    <tspan x="62" y="266" fill="${t.accent}">run on.</tspan>
-  </text>
-  <text font-family='${FONT}' font-size="17" font-weight="400" fill="${t.ink2}">
-    <tspan x="64" y="314">Eight years inside an agency, running Salesforce, data and product.</tspan>
-    <tspan x="64" y="340">Now I ship the CRM, dialer and paperwork agents use every day.</tspan>
-  </text>
-
-  <!-- Now building -->
-  <g>
-    <rect x="64" y="374" width="188" height="36" rx="18" fill="${t.chipFill}" stroke="${t.panelBorder}"/>
-    <circle cx="86" cy="392" r="9" fill="${t.accent}" opacity="0.25">
-      <animate attributeName="r" values="6;11;6" dur="2.4s" repeatCount="indefinite"/>
-      <animate attributeName="opacity" values="0.35;0;0.35" dur="2.4s" repeatCount="indefinite"/>
+  <!-- HUD: types itself out -->
+  ${typed(48, 46, "SAMUEL HERNANDEZ", { at: 0.2, id: "name" })}
+  ${typed(330, 46, "MIAMI, FL", { at: 0.95, fill: C.dim, id: "city" })}
+  ${typed(470, 46, "UTC-4", { at: 1.35, fill: C.dim, id: "tz" })}
+  <g opacity="1">${cutIn(1.7)}
+    <circle cx="606" cy="42" r="3.5" fill="${C.green}">
+      <animate attributeName="opacity" values="1;0.35;1" dur="2.2s" repeatCount="indefinite"/>
     </circle>
-    <circle cx="86" cy="392" r="4.5" fill="${t.accent}"/>
-    <text x="102" y="397" font-family='${FONT}' font-size="14" font-weight="600" fill="${t.ink}">Now building <tspan fill="${t.accent}">Navo</tspan></text>
+    ${mono(618, 46, "ONLINE", { fill: C.green })}
+  </g>
+  <g opacity="1">${cutIn(1.9)}
+    ${mono(930, 46, "SYNC", { fill: C.dim })}
+    <rect x="982" y="36" width="118" height="7" fill="${C.cell}" stroke="${C.cellLine}"/>
+    <rect x="982" y="36" width="118" height="7" fill="${C.orange}">
+      <animate attributeName="width" values="0;0;118" keyTimes="0;0.5;1" dur="4s" fill="freeze" calcMode="spline" keySplines="0 0 1 1;0.2 0.8 0.2 1"/>
+    </rect>
+    ${mono(1152, 46, "100%", { anchor: "end", extra: cutIn(3.9) })}
+  </g>
+  <line x1="48" y1="62" x2="1152" y2="62" stroke="${C.orange}" stroke-opacity="0.35">
+    <animate attributeName="x2" values="48;48;1152" keyTimes="0;0.1;1" dur="1.4s" fill="freeze"/>
+  </line>
+
+  <!-- Title card: hard cuts, the way they do it -->
+  ${mono(48, 118, "EPISODE 00", { spacing: 4, extra: cutIn(0.7) })}
+  ${serif(42, 302, "SAM", { size: 196, spacing: -8, extra: cutIn(0.95) })}
+  ${glitch(42, 302, "SAM", { size: 196, spacing: -8 })}
+  ${serif(48, 386, "HERNANDEZ", { size: 76, spacing: -2, extra: cutIn(1.15) })}
+  <rect x="48" y="403" width="472" height="2" fill="${C.orange}">
+    <animate attributeName="width" values="0;0;472" keyTimes="0;0.65;1" dur="2s" fill="freeze"/>
+  </rect>
+  <g font-family='${SERIF}' font-size="40" font-weight="800" fill="${C.ink}" text-anchor="middle">
+    ${kana.map((k, i) => `<text x="598" y="${150 + i * 48}">${cutIn(1.4 + i * 0.12)}${k}</text>`).join("")}
+  </g>
+  <line x1="598" y1="100" x2="598" y2="112" stroke="${C.orange}" stroke-width="2">${cutIn(1.4)}</line>
+
+  <!-- Reticle, with the tempo in it -->
+  <g transform="translate(940 236)">
+    ${reticle(148, 1.0)}
+    <text x="0" y="-10" font-family='${MONO}' font-size="58" letter-spacing="-1" fill="${C.ink}" text-anchor="middle">${cutIn(1.75)}${BPM}</text>
+    <text x="0" y="16" font-family='${MONO}' font-size="12" letter-spacing="5" fill="${C.orange}" text-anchor="middle">${cutIn(1.85)}BPM</text>
+    <text x="0" y="170" font-family='${MONO}' font-size="11" letter-spacing="3" fill="${C.orange}" fill-opacity="0.8" text-anchor="middle">${cutIn(2.0)}PATTERN  ORANGE</text>
   </g>
 
-  <!-- Every channel, one list -->
-  <text x="${SX}" y="96" font-family='${FONT}' font-size="11" font-weight="700" letter-spacing="2.2" fill="${t.muted}">EVERY CHANNEL</text>
-  <text x="${LX}" y="96" font-family='${FONT}' font-size="11" font-weight="700" letter-spacing="2.2" fill="${t.muted}">ONE LIST</text>
-  ${paths}
-  ${pills}
-  ${rows}
-  ${flashes}
-  ${dots}
+  <!-- What's on -->
+  ${marquee({ x: 48, y: 438, width: 1104, items: ["NOW PLAYING  SOLOMUN", "REWATCHING  ALL 26 EPISODES, AGAIN", `${BPM} BPM`, "MIAMI AFTER HOURS", "ANIME RECS OPEN", "STATUS  ONLINE"] })}
 
-  ${orbi("ho", { x: 1028, y: 232, scale: 0.8 })}
+  <!-- Sequencer -->
+  ${sequencer({ x: 48, y: 470 })}
+  ${eq({ x: 1012, y: 536, n: 14, w: 7, gap: 3, max: 48 })}
+
+  ${hazard(W, H - 9, 9, 1)}
 </svg>
 `;
 }
 
-/* ------------------------------------------------------------------ cards */
+/* ---------------------------------------------------------- on rotation */
 
-function card(t, { eyebrow, title, lines, art }) {
-  const W = 588;
-  const H = 168;
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" role="img" aria-label="${esc(title)}">
-  <rect x="0.5" y="0.5" width="${W - 1}" height="${H - 1}" rx="18" fill="${t.panel}" stroke="${t.panelBorder}"/>
-  <text x="28" y="40" font-family='${FONT}' font-size="11" font-weight="700" letter-spacing="2" fill="${t.accent}">${esc(eyebrow)}</text>
-  <text x="27" y="76" font-family='${FONT}' font-size="26" font-weight="800" letter-spacing="-0.6" fill="${t.ink}">${esc(title)}</text>
-  <text font-family='${FONT}' font-size="14" font-weight="400" fill="${t.ink2}">
-    ${lines.map((l, i) => `<tspan x="28" y="${104 + i * 21}">${esc(l)}</tspan>`).join("")}
-  </text>
-  ${art}
+function onRotation() {
+  const W = 1200;
+  const H = 250;
+  const cx = 640;
+  const cy = 125;
+  const grooves = Array.from({ length: 9 }, (_, i) => `<circle cx="${cx}" cy="${cy}" r="${88 - i * 6}" fill="none" stroke="#1c1c1c" stroke-width="1"/>`).join("");
+  const px = cx + 128; // tonearm pivot
+  const py = cy - 92;
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" role="img" aria-label="Episode 01, on rotation: Solomun. Techno, melodic, all night long.">
+  ${frame(W, H, { glow: [cx, cy, 240] })}
+  ${mono(48, 56, "EPISODE 01", { spacing: 4, extra: cutIn(0.3) })}
+  ${serif(46, 118, "ON ROTATION", { size: 52, spacing: -1.5, extra: cutIn(0.5) })}
+  ${typed(48, 152, "33 1/3 RPM", { at: 0.8, fill: C.dim, id: "rpm" })}
+  ${typed(48, 176, "SIDE A", { at: 1.3, fill: C.dim, id: "side" })}
+  ${typed(48, 200, "REPEAT  ALL", { at: 1.6, fill: C.dim, id: "rep" })}
+
+  <!-- The record -->
+  <circle cx="${cx}" cy="${cy}" r="100" fill="#0f0f0f" stroke="${C.frame}"/>
+  <g>
+    <animateTransform attributeName="transform" type="rotate" from="0 ${cx} ${cy}" to="360 ${cx} ${cy}" dur="1.8s" repeatCount="indefinite"/>
+    ${grooves}
+    <path d="M${cx},${cy} L${cx + 96},${cy - 28} A100,100 0 0 1 ${cx + 100},${cy} Z" fill="#ffffff" fill-opacity="0.05"/>
+    <path d="M${cx},${cy} L${cx - 96},${cy + 28} A100,100 0 0 1 ${cx - 100},${cy} Z" fill="#ffffff" fill-opacity="0.05"/>
+    <circle cx="${cx}" cy="${cy}" r="34" fill="${C.orange}"/>
+    <circle cx="${cx}" cy="${cy}" r="34" fill="none" stroke="#000000" stroke-opacity="0.25"/>
+    <text x="${cx}" y="${cy - 6}" font-family='${MONO}' font-size="9" letter-spacing="2" fill="#0a0a0a" text-anchor="middle">SOLOMUN</text>
+    <text x="${cx}" y="${cy + 14}" font-family='${MONO}' font-size="7" letter-spacing="1" fill="#0a0a0a" fill-opacity="0.75" text-anchor="middle">${BPM} BPM</text>
+    <circle cx="${cx}" cy="${cy}" r="3.5" fill="#0a0a0a"/>
+  </g>
+  <!-- Tonearm: drops onto the record -->
+  <g>
+    <animateTransform attributeName="transform" type="rotate" values="-16 ${px} ${py};-16 ${px} ${py};0 ${px} ${py}" keyTimes="0;0.35;1" dur="2s" calcMode="spline" keySplines="0 0 1 1;0.3 0 0.2 1" fill="freeze"/>
+    <line x1="${px}" y1="${py}" x2="${cx + 44}" y2="${cy + 2}" stroke="#2f2f2f" stroke-width="4" stroke-linecap="round"/>
+    <line x1="${px}" y1="${py}" x2="${cx + 44}" y2="${cy + 2}" stroke="#555555" stroke-width="1.5" stroke-linecap="round"/>
+    <rect x="${cx + 36}" y="${cy - 4}" width="12" height="12" rx="2" fill="#3a3a3a" transform="rotate(-48 ${cx + 42} ${cy + 2})"/>
+  </g>
+  <circle cx="${px}" cy="${py}" r="9" fill="#1a1a1a" stroke="${C.frame}"/>
+
+  <!-- Who -->
+  ${mono(820, 96, "SOLOMUN", { size: 38, fill: C.ink, spacing: 7, extra: cutIn(0.6) })}
+  ${typed(820, 124, "techno. melodic. all night long.", { size: 13, fill: C.dim, spacing: 1, at: 0.9, cps: 32, id: "sub" })}
+  ${eq({ x: 820, y: 196, n: 30, w: 7, gap: 4, max: 50 })}
+  <rect x="820" y="210" width="326" height="3" fill="${C.cell}"/>
+  <rect x="820" y="210" width="0" height="3" fill="${C.orange}">
+    <animate attributeName="width" values="0;326" dur="90s" repeatCount="indefinite"/>
+  </rect>
+  ${mono(820, 232, "NOW PLAYING", { size: 10, spacing: 3, opacity: 0.8 })}
+  <circle cx="914" cy="228" r="3" fill="${C.ember}">
+    <animate attributeName="opacity" values="1;0.2;1" dur="1.2s" repeatCount="indefinite"/>
+  </circle>
+  ${mono(1146, 232, "LIVE", { size: 10, spacing: 3, anchor: "end", fill: C.ember })}
 </svg>
 `;
 }
 
-function navoArt(t) {
-  // A small list with the top row lit, and Orbi beside it.
-  const x = 418;
-  const rows = [36, 66, 96, 126].map((y, i) => {
-    const first = i === 0;
-    return `
-    <rect x="${x}" y="${y}" width="96" height="22" rx="7" fill="${t.rowFill}" stroke="${first ? t.accent : t.panelBorder}" stroke-width="${first ? 1.5 : 1}"${first ? "" : ` opacity="${0.9 - i * 0.18}"`}/>
-    <circle cx="${x + 12}" cy="${y + 11}" r="5" fill="${first ? t.accent : t.line}"/>
-    <rect x="${x + 23}" y="${y + 7}" width="${[46, 34, 50, 30][i]}" height="4" rx="2" fill="${first ? t.ink : t.muted}" opacity="${first ? 0.85 : 0.5}"/>
-    <rect x="${x + 23}" y="${y + 14}" width="${[28, 22, 30, 18][i]}" height="3" rx="1.5" fill="${t.muted}" opacity="0.45"/>`;
-  }).join("");
-  return rows + orbi("nc", { x: 506, y: 44, scale: 0.44, wave: true });
-}
+/* ------------------------------------------------------------ on screen */
 
-function quoteflowArt(t) {
-  // Three pipeline columns; the cards drift one column to the right.
-  const cols = [
-    { x: 404, label: "new", n: 3 },
-    { x: 462, label: "due", n: 2 },
-    { x: 520, label: "quoted", n: 1 },
-  ];
-  const parts = cols.map((c) => {
-    const cards = Array.from({ length: c.n }, (_, i) => {
-      const y = 50 + i * 26;
-      return `<rect x="${c.x}" y="${y}" width="44" height="18" rx="5" fill="${t.rowFill}" stroke="${t.panelBorder}"/>
-        <rect x="${c.x + 7}" y="${y + 7}" width="${[26, 18, 22][i]}" height="4" rx="2" fill="${t.muted}" opacity="0.55"/>`;
-    }).join("");
-    return `<text x="${c.x}" y="40" font-family='${FONT}' font-size="9" font-weight="700" letter-spacing="1.2" fill="${t.muted}">${esc(c.label.toUpperCase())}</text>${cards}`;
-  });
-  const mover = `
-    <g>
-      <animateTransform attributeName="transform" type="translate" values="0 0;0 0;58 0;58 0;116 0;116 0;0 0" keyTimes="0;0.2;0.3;0.55;0.65;0.9;1" dur="9s" repeatCount="indefinite" calcMode="spline" keySplines="0 0 1 1;0.2 0.8 0.2 1;0 0 1 1;0.2 0.8 0.2 1;0 0 1 1;0 0 1 1"/>
-      <animate attributeName="opacity" values="1;1;1;1;1;0;0;1" keyTimes="0;0.2;0.55;0.65;0.9;0.93;0.98;1" dur="9s" repeatCount="indefinite"/>
-      <rect x="404" y="128" width="44" height="18" rx="5" fill="${t.rowFill}" stroke="${t.accent}" stroke-width="1.5"/>
-      <circle cx="412" cy="137" r="3" fill="${t.coral}"/>
-      <rect x="418" y="135" width="22" height="4" rx="2" fill="${t.ink}" opacity="0.8"/>
-    </g>`;
-  return parts.join("") + mover;
-}
+function onScreen() {
+  const W = 1200;
+  const H = 330;
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" role="img" aria-label="Episode 02, on screen: a title card in Japanese. Rewatching, always. Anime in general; recommendations open.">
+  ${frame(W, H, { glow: [220, 300, 300] })}
+  ${hazard(W, 0, 7, -1)}
+  ${mono(48, 56, "EPISODE 02", { spacing: 4, extra: cutIn(0.3) })}
+  ${serif(46, 118, "ON SCREEN", { size: 52, spacing: -1.5, extra: cutIn(0.5) })}
+  <circle cx="54" cy="160" r="4" fill="${C.ember}">
+    <animate attributeName="opacity" values="1;0.15;1" dur="1.6s" repeatCount="indefinite"/>
+  </circle>
+  ${typed(66, 164, "REWATCHING. ALWAYS.", { at: 0.9, fill: C.dim, id: "re" })}
+  ${typed(48, 190, "ANIME IN GENERAL. RECOMMENDATIONS OPEN.", { at: 1.7, fill: C.dim, id: "recs" })}
 
-/* ------------------------------------------------------------------ stack */
-
-function stack(t) {
-  const items = [
-    "TypeScript",
-    "Next.js",
-    "React",
-    "Supabase",
-    "Postgres",
-    "Tailwind",
-    "Twilio",
-    "Vercel",
-    "Salesforce",
-    "Snowflake",
-  ];
-  // Chips wrap into rows at the README's own width, so the strip renders
-  // 1:1 on a desktop profile instead of being scaled down to fit.
-  const W = 880;
-  const H = 44;
-  const PAD = 16;
-  const DOT = 14;
-  const GAP = 10;
-  const approx = (s) => Math.round(s.length * 8.1); // 14px, weight 500
-  let x = 0;
-  let row = 0;
-  const chips = items.map((label, i) => {
-    const w = PAD + DOT + approx(label) + PAD;
-    if (x + w > W) {
-      x = 0;
-      row += 1;
-    }
-    const y = row * (H + GAP);
-    const chip = `
-    <g transform="translate(${x} ${y})">
-      <rect x="0.5" y="0.5" width="${w - 1}" height="${H - 1}" rx="${H / 2}" fill="${t.chipFill}" stroke="${t.panelBorder}"/>
-      <circle cx="${PAD + 4}" cy="${H / 2}" r="4" fill="${i < 8 ? t.accent : t.coral}"/>
-      <text x="${PAD + DOT}" y="${H / 2 + 5}" font-family='${FONT}' font-size="14" font-weight="500" fill="${t.ink}" textLength="${approx(label)}" lengthAdjust="spacingAndGlyphs">${esc(label)}</text>
-    </g>`;
-    x += w + GAP;
-    return chip;
-  });
-  const TOTAL_H = (row + 1) * H + row * GAP;
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${TOTAL_H}" width="${W}" height="${TOTAL_H}" role="img" aria-label="${esc(items.join(", "))}">
-  ${chips.join("")}
+  <!-- The title card. If you know, you know. -->
+  ${mono(1152, 150, "第弐拾六話、また", { size: 13, anchor: "end", spacing: 6, fill: C.dim, extra: cutIn(0.5) })}
+  ${serif(1156, 250, "新世紀エヴァンゲリオン", { size: 66, anchor: "end", spacing: 3, extra: cutIn(0.8) })}
+  ${glitch(1156, 250, "新世紀エヴァンゲリオン", { size: 66, spacing: 3, anchor: "end", period: 9, at: 0.4 })}
+  <rect x="700" y="276" width="452" height="2" fill="${C.orange}">
+    <animate attributeName="width" values="0;0;452" keyTimes="0;0.55;1" dur="1.8s" fill="freeze"/>
+  </rect>
 </svg>
 `;
 }
 
-/* ------------------------------------------------------------------ write */
+/* ---------------------------------------------------------------- write */
 
-for (const [name, t] of Object.entries(THEMES)) {
-  writeFileSync(join(OUT, `hero-${name}.svg`), hero(t));
-  writeFileSync(
-    join(OUT, `card-navo-${name}.svg`),
-    card(t, {
-      eyebrow: "LIVE  ·  NAVOCRM.COM",
-      title: "Navo",
-      lines: ["The CRM for insurance agencies. Every new lead,", "text and missed call on one list, so agents", "always know who to call next."],
-      art: navoArt(t),
-    }),
-  );
-  writeFileSync(
-    join(OUT, `card-quoteflow-${name}.svg`),
-    card(t, {
-      eyebrow: "OPEN SOURCE  ·  NEXT.JS + SUPABASE",
-      title: "QuoteFlow",
-      lines: ["A follow-up queue and lead pipeline for", "independent agents. Import leads, set the next", "touch, work the day's list."],
-      art: quoteflowArt(t),
-    }),
-  );
-  writeFileSync(join(OUT, `stack-${name}.svg`), stack(t));
-}
+writeFileSync(join(OUT, "hero.svg"), hero());
+writeFileSync(join(OUT, "on-rotation.svg"), onRotation());
+writeFileSync(join(OUT, "on-screen.svg"), onScreen());
 console.log("wrote", OUT);
